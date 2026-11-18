@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Android 15 (API 35) 会强制全面屏；这里显式关闭，保持"系统状态栏 + 内容在其下方"的正常外观，
+         避免状态栏透明/内容上顶导致的遮挡或空白。其余机型走 values/themes.xml。 -->
+    <style name="Theme.Motrix" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/mtx_accent</item>
+        <item name="colorPrimaryContainer">@color/mtx_accent</item>
+        <item name="colorSurface">@color/mtx_surface</item>
+        <item name="android:colorBackground">@color/mtx_bg</item>
+        <item name="android:statusBarColor">@color/mtx_bg</item>
+        <item name="android:navigationBarColor">@color/mtx_bg</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:textColorPrimary">@color/mtx_text</item>
+        <item name="android:textColorSecondary">@color/mtx_text_dim</item>
+        <item name="android:windowOptOutEdgeToEdgeEnforcement" tools:targetApi="35">true</item>
+    </style>
+
+    <style name="ThemeOverlay_Motrix_Dialog" parent="ThemeOverlay.Material3.MaterialAlertDialog">
+        <item name="colorSurface">@color/mtx_surface</item>
+    </style>
+</resources>

@@ -1,0 +1,18 @@
+﻿Motrix 安卓版 fix2 修复说明
+==============================
+APK: motrix-android-2.4.3-fix2-debug.apk
+大小: 18647544 bytes
+SHA-256: DA34536A2DD4902085E522535D851C0019605DF74283084B666EF34BBF17F820
+基线: fix1(官方 aria2 Android 版 可正常下载) + 本次性能调优
+
+本次改动(仅 aria2 默认参数, 不改业务逻辑):
+- 直链提速: max-connection-per-server=16 / split=16 / min-split-size=1M  (此前默认每服务器仅 1 连接, 单文件直链偏慢)
+- BT 找 peer 更积极: enable-dht=true / listen-port=6881-6999 / dht-listen-port=6881-6999 / enable-peer-exchange=true / bt-max-peers=128
+- BT tracker 超时放宽至 10s, 并额外追加一批公共 tracker 提升连通率
+
+说明:
+- 旧的 Big Buck Bunny 磁力本身种子老、peer 少, 慢属正常, 不代表引擎速度。
+- 建议用 Ubuntu 官方种子做 BT 速度基准(种子极多):
+  magnet:?xt=urn:btih:2e8e44068b254814ea1a7d4969a9af1d78e0f51f&dn=ubuntu-22.04.5-desktop-amd64.iso&tr=https%3A%2F%2Ftorrent.ubuntu.com%2Fannounce&tr=https%3A%2F%2Fipv6.torrent.ubuntu.com%2Fannounce
+- 直链对照: https://proof.ovh.net/files/100Mb.dat
+- arm64 手机用官方版 aria2; armeabi-v7a 仍是旧 musl 版(32位老机可能不可用)。

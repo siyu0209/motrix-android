@@ -1,0 +1,32 @@
+Motrix 安卓版 · fix1 修复说明（2026-11-18）
+
+本版针对真机反馈的两个问题做了修复：
+
+【问题1】点“下载”直接闪退
+根因：引擎的添加回调在后台线程（Dispatchers.IO）里直接调用 Toast。
+      安卓禁止非主线程弹 Toast，抛异常导致闪退。
+修复：Engine.addUri / addTorrentBytes 的结果回调统一 withContext(Dispatchers.Main) 切回主线程；
+      MainActivity 的 toast() 也做了主线程判断兜底。→ 该闪退已根除。
+
+【问题2】启动就弹 “aria2 启动超时：”
+根因：之前内置的是 musl 静态的 Linux 版 aria2c（14MB），不是给 Android 编的，
+      在真机上进程起不来（exec 后崩溃/退出），所以 RPC 永远不通 → 超时。
+修复：换成 aria2 官方 Android 构建 aria2-1.37.0-aarch64-linux-android-build1
+      （PT_INTERP=/system/bin/linker64，仅依赖系统 libm/libdl/libc，
+        OpenSSL/zlib/expat/c-ares 全静态内置，6.1MB）。
+      版本仍是 1.37.0，RPC 协议与之前完全一致。
+
+【额外增强：启动自检】
+若 aria2 仍启动失败，现在会弹“下载引擎启动诊断”，显示：
+  二进制路径 / 进程是否存活 / 退出码 / 最后输出 / `aria2c --version` 自检 / 日志路径
+并可一键复制。万一还有问题，把这行文字发来即可精确定位。
+
+安装：adb install -r motrix-android-2.4.3-fix1-debug.apk
+（同签名可直接覆盖安装；若之前装过旧包建议直接覆盖或先卸载重装）
+
+建议自测顺序：
+1) 打开 App，确认不再闪退、底部无“引擎未就绪”提示；
+2) 新建任务 -> 粘贴 https://proof.ovh.net/files/10Mb.dat -> 应开始下载并出现速度；
+3) 再试磁力（Sintel）验证 BT。
+
+注：3B（原版界面）的移动端布局适配尚未做，等真机连接后按手机比例重排。

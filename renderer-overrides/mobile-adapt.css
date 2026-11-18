@@ -1,0 +1,404 @@
+/* =============================================================================
+ * Motrix Android — 移动端适配样式层 (mobile-adapt.css)
+ * -----------------------------------------------------------------------------
+ * 设计原则：
+ *   1) 低侵入：所有规则都挂在根开关 `html.mtx-mobile` 下，未启用时对原站零影响。
+ *   2) 不臆造 class：只依赖标准元素、ARIA 角色、通用属性选择器与 data-mtx-* 钩子，
+ *      不硬编码 Motrix 内部 class 名。凡是需要"按实际 DOM 微调"的地方都标了 TODO。
+ *   3) 可开关：html.mtx-mobile 总开关；分项开关 mtx-no-reflow / mtx-no-fullscreen-dialog
+ *      / mtx-no-motion；主题用 CSS 变量。
+ *   4) 只叠样式，不改操作路径：不隐藏功能入口、不改 DOM 结构（结构补丁在 JS 里做且幂等）。
+ *
+ * 注入方式见 README.md。建议与 mobile-adapt.js 一起引入（JS 负责加 mtx-mobile 等根 class、
+ * 探测键盘/横竖屏/底部栏高度，并把结果写进 CSS 变量）。
+ * ========================================================================== */
+
+/* -----------------------------------------------------------------------------
+ * 0. 设计令牌（主题化入口）
+ *    仅在 html.mtx-mobile 下生效；应用如果自己已有主题，可只取用需要的变量，
+ *    本层不会强行改 body 背景色，避免覆盖原配色（见 README「主题接入」）。
+ * -------------------------------------------------------------------------- */
+html.mtx-mobile {
+  /* 尺寸/节奏 */
+  --mtx-tap: 44px;                 /* 最小点击目标（WCAG/移动端经验值） */
+  --mtx-tap-min: 44px;
+  --mtx-gap: clamp(8px, 2.6vw, 16px);
+  --mtx-radius: 12px;
+  --mtx-radius-sm: 8px;
+  --mtx-line: 1.5;
+
+  /* 字号梯度（rem，根字号 16px 基准；移动端正文 15px 舒适） */
+  --mtx-font-base: 15px;
+  --mtx-font-xs: 12px;
+  --mtx-font-sm: 13px;
+  --mtx-font-md: 15px;
+  --mtx-font-lg: 17px;
+  --mtx-font-xl: 20px;
+  --mtx-font-2xl: 24px;
+
+  /* 安全区（刘海/挖孔/手势条）；env 带兜底，旧 WebView 也不会算错 */
+  --mtx-safe-top: env(safe-area-inset-top, 0px);
+  --mtx-safe-right: env(safe-area-inset-right, 0px);
+  --mtx-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --mtx-safe-left: env(safe-area-inset-left, 0px);
+
+  /* 运行时由 JS 写入：底部导航/工具条占位高度、软键盘高度、可视高度 */
+  --mtx-bottom-bar: 0px;
+  --mtx-keyboard-height: 0px;
+  --mtx-vh: 100vh;
+
+  /* 主题色（浅色默认）；暗色见 media(prefers-color-scheme) 与 .mtx-dark/.mtx-light */
+  --mtx-bg: #f5f6f8;
+  --mtx-surface: #ffffff;
+  --mtx-surface-2: #eef0f4;
+  --mtx-text: #1c2024;
+  --mtx-text-dim: #6b7280;
+  --mtx-border: #e3e6eb;
+  --mtx-primary: #3b82f6;
+  --mtx-primary-contrast: #ffffff;
+  --mtx-danger: #ef4444;
+  --mtx-success: #10b981;
+
+  /* 动效时长 */
+  --mtx-dur-fast: 120ms;
+  --mtx-dur: 200ms;
+  --mtx-ease: cubic-bezier(.2, .8, .2, 1);
+
+  font-size: var(--mtx-font-base);
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* 暗色：跟随系统 + 手动 .mtx-dark 强制 */
+@media (prefers-color-scheme: dark) {
+  html.mtx-mobile {
+    --mtx-bg: #14161a;
+    --mtx-surface: #1d2026;
+    --mtx-surface-2: #262a32;
+    --mtx-text: #e7e9ee;
+    --mtx-text-dim: #9aa3af;
+    --mtx-border: #2c313a;
+    --mtx-primary: #4f8cff;
+  }
+}
+html.mtx-mobile.mtx-dark {
+  --mtx-bg: #14161a;
+  --mtx-surface: #1d2026;
+  --mtx-surface-2: #262a32;
+  --mtx-text: #e7e9ee;
+  --mtx-text-dim: #9aa3af;
+  --mtx-border: #2c313a;
+  --mtx-primary: #4f8cff;
+}
+html.mtx-mobile.mtx-light {
+  --mtx-bg: #f5f6f8;
+  --mtx-surface: #ffffff;
+  --mtx-surface-2: #eef0f4;
+  --mtx-text: #1c2024;
+  --mtx-text-dim: #6b7280;
+  --mtx-border: #e3e6eb;
+  --mtx-primary: #3b82f6;
+}
+
+/* -----------------------------------------------------------------------------
+ * 1. 基础复位与手感
+ * -------------------------------------------------------------------------- */
+html.mtx-mobile,
+html.mtx-mobile body {
+  overscroll-behavior-y: contain;   /* 抑制整页下拉回弹穿透 */
+  -webkit-tap-highlight-color: transparent; /* 去掉安卓点击灰块 */
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* 交互元素：去掉 300ms 延迟与双击缩放 */
+html.mtx-mobile a,
+html.mtx-mobile button,
+html.mtx-mobile [role="button"],
+html.mtx-mobile input,
+html.mtx-mobile select,
+html.mtx-mobile textarea,
+html.mtx-mobile label {
+  touch-action: manipulation;
+}
+
+/* iOS/安卓 惯性滚动 + 边界不回弹（作用于显式标记的滚动容器与 main） */
+html.mtx-mobile .mtx-scroll,
+html.mtx-mobile [data-mtx-scroll],
+html.mtx-mobile main {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+/* -----------------------------------------------------------------------------
+ * 2. 安全区（刘海 / 挖孔 / 手势条）
+ *    body 顶部留出状态栏；滚动内容底部避让手势条 + 底部导航
+ * -------------------------------------------------------------------------- */
+html.mtx-mobile body {
+  padding-left: var(--mtx-safe-left);
+  padding-right: var(--mtx-safe-right);
+}
+/* 应用外壳/顶栏自己负责顶部安全区（JS 会给候选外壳加 .mtx-app-shell） */
+html.mtx-mobile .mtx-app-shell,
+html.mtx-mobile [data-mtx-app-shell] {
+  padding-top: var(--mtx-safe-top);
+}
+/* 可滚动主体：底部避让 */
+html.mtx-mobile .mtx-scroll,
+html.mtx-mobile [data-mtx-scroll],
+html.mtx-mobile main {
+  padding-bottom: calc(var(--mtx-safe-bottom) + var(--mtx-bottom-bar));
+}
+/* 工具类：给任意块补安全区 */
+html.mtx-mobile .mtx-safe-pad {
+  padding: var(--mtx-safe-top) var(--mtx-safe-right) var(--mtx-safe-bottom) var(--mtx-safe-left);
+}
+
+/* -----------------------------------------------------------------------------
+ * 3. 点击目标 ≥ 44px
+ *    只对"按钮类"抬 min-height；图标按钮用 .mtx-icon-btn 或 data-mtx-icon-btn 强制 44×44。
+ *    普通文字链接不强制 min-width，避免撑破行内排版。
+ * -------------------------------------------------------------------------- */
+html.mtx-mobile button,
+html.mtx-mobile [role="button"],
+html.mtx-mobile .mtx-btn,
+html.mtx-mobile .mtx-tap {
+  min-height: var(--mtx-tap);
+}
+html.mtx-mobile .mtx-icon-btn,
+html.mtx-mobile [data-mtx-icon-btn] {
+  min-width: var(--mtx-tap);
+  min-height: var(--mtx-tap);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+/* 列表行内的操作图标：加大可点区域但不改变视觉大小 */
+html.mtx-mobile .mtx-row-action,
+html.mtx-mobile [data-mtx-row-action] {
+  min-width: var(--mtx-tap);
+  min-height: var(--mtx-tap);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: -8px;              /* 视觉不偏移 */
+  padding: 8px;
+  border-radius: var(--mtx-radius-sm);
+}
+
+/* -----------------------------------------------------------------------------
+ * 4. 输入框防聚焦缩放（iOS Safari + 安卓 Chrome 只要 font-size<16px 就放大页面）
+ * -------------------------------------------------------------------------- */
+html.mtx-mobile input:not([type="range"]):not([type="checkbox"]):not([type="radio"]):not([type="color"]),
+html.mtx-mobile textarea,
+html.mtx-mobile select {
+  font-size: 16px;            /* 硬性 16px，低于此会触发聚焦缩放 */
+  line-height: 1.4;
+}
+/* 让输入框在窄屏占满行，减少横向滚动 */
+@media (max-width: 599.98px) {
+  html.mtx-mobile [data-mtx-field],
+  html.mtx-mobile .mtx-field {
+    width: 100%;
+    box-sizing: border-box;
+  }
+}
+
+/* -----------------------------------------------------------------------------
+ * 5. 字体与间距缩放（只调层级与行高，不重设颜色）
+ * -------------------------------------------------------------------------- */
+html.mtx-mobile h1 { font-size: var(--mtx-font-2xl); line-height: 1.25; }
+html.mtx-mobile h2 { font-size: var(--mtx-font-xl);  line-height: 1.3; }
+html.mtx-mobile h3 { font-size: var(--mtx-font-lg);  line-height: 1.35; }
+html.mtx-mobile h4,
+html.mtx-mobile h5,
+html.mtx-mobile h6 { font-size: var(--mtx-font-md); line-height: 1.4; }
+html.mtx-mobile p,
+html.mtx-mobile li { line-height: var(--mtx-line); }
+
+/* -----------------------------------------------------------------------------
+ * 6. 窄屏单列重排（列表 / 卡片）
+ *    只折叠"显式多列"的网格，避免误伤普通 flex 排版：
+ *      - Tailwind 的 grid-cols-* 容器（视觉层就是网格，最安全的折叠对象）
+ *      - 显式标注 data-mtx-reflow="single" 的容器
+ *    可用 html.mtx-no-reflow 整体关闭。
+ * -------------------------------------------------------------------------- */
+@media (max-width: 599.98px) {
+  html.mtx-mobile:not(.mtx-no-reflow) [class*="grid-cols-"] {
+    grid-template-columns: minmax(0, 1fr) !important;  /* minmax(0,1fr) 防溢出 */
+  }
+  html.mtx-mobile:not(.mtx-no-reflow) [data-mtx-reflow="single"] {
+    display: block !important;
+  }
+  html.mtx-mobile:not(.mtx-no-reflow) [data-mtx-reflow="single"] > * {
+    width: 100% !important;
+  }
+  /* 卡片铺满行，圆角收敛一点更像原生卡片 */
+  html.mtx-mobile .mtx-card,
+  html.mtx-mobile [data-mtx-card] {
+    width: 100%;
+    box-sizing: border-box;
+    border-radius: var(--mtx-radius);
+  }
+}
+
+/* -----------------------------------------------------------------------------
+ * 7. 底部导航 / 浮动操作按钮（FAB）避让
+ *    JS 会把底部导航高度写进 --mtx-bottom-bar；这里保证 FAB、Toast、贴底条不压手势条。
+ * -------------------------------------------------------------------------- */
+html.mtx-mobile .mtx-fab,
+html.mtx-mobile [data-mtx-fab] {
+  position: fixed;
+  right: calc(var(--mtx-safe-right) + 16px);
+  bottom: calc(var(--mtx-safe-bottom) + var(--mtx-bottom-bar) + 16px);
+  z-index: 60;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .22);
+}
+html.mtx-mobile .mtx-bottom-bar,
+html.mtx-mobile [data-mtx-bottom-bar] {
+  padding-bottom: var(--mtx-safe-bottom);
+}
+/* 贴底 Toast/提示条：抬高到手势条之上 */
+html.mtx-mobile .mtx-toast,
+html.mtx-mobile [data-mtx-toast] {
+  bottom: calc(var(--mtx-safe-bottom) + var(--mtx-bottom-bar) + 16px) !important;
+}
+
+/* -----------------------------------------------------------------------------
+ * 8. 弹窗全屏化（窄屏）
+ *    覆盖 role=dialog / <dialog open> / .mtx-dialog / data-mtx-dialog。
+ *    可用 html.mtx-no-fullscreen-dialog 关闭（例如希望保持居中卡片）。
+ * -------------------------------------------------------------------------- */
+@media (max-width: 599.98px) {
+  html.mtx-mobile:not(.mtx-no-fullscreen-dialog) [role="dialog"],
+  html.mtx-mobile:not(.mtx-no-fullscreen-dialog) dialog[open],
+  html.mtx-mobile:not(.mtx-no-fullscreen-dialog) .mtx-dialog,
+  html.mtx-mobile:not(.mtx-no-fullscreen-dialog) [data-mtx-dialog] {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100vw !important;
+    max-width: 100vw !important;
+    height: 100vh !important;         /* 兜底 */
+    height: 100dvh !important;        /* 现代 WebView 精确可视高 */
+    max-height: 100dvh !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    padding-top: var(--mtx-safe-top);
+    padding-bottom: var(--mtx-safe-bottom);
+    box-sizing: border-box;
+  }
+  /* 原生 <dialog> 的遮罩 */
+  html.mtx-mobile dialog[open]::backdrop {
+    background: rgba(0, 0, 0, .45);
+  }
+}
+
+/* -----------------------------------------------------------------------------
+ * 9. 隐藏/中和桌面专属 hover 态（触屏设备）
+ *    Tailwind v4 的 hover: 变体默认只在 @media(hover:hover) 生效，这里再兜底：
+ *    - 去掉"悬浮位移/放大"这类在触屏上会粘连的效果
+ *    - 把依赖 hover 才出现的纯装饰阴影降级
+ * -------------------------------------------------------------------------- */
+@media (hover: none) {
+  html.mtx-mobile .mtx-hover-lift:hover,
+  html.mtx-mobile [data-mtx-hover-lift]:hover {
+    transform: none !important;
+    box-shadow: none !important;
+  }
+  /* 触屏不需要 cursor:pointer 的悬停态伪效果 */
+  html.mtx-mobile .mtx-no-hover:hover {
+    filter: none !important;
+  }
+}
+
+/* -----------------------------------------------------------------------------
+ * 10. 横屏安全（部分页面横屏看，尤其播放/详情）
+ * -------------------------------------------------------------------------- */
+@media (orientation: landscape) and (max-height: 560px) {
+  html.mtx-mobile { --mtx-gap: 8px; }
+  /* 横屏顶部工具条压缩，把高度还给内容 */
+  html.mtx-mobile header,
+  html.mtx-mobile .mtx-appbar,
+  html.mtx-mobile [data-mtx-appbar] {
+    min-height: 48px;
+    padding-top: var(--mtx-safe-top);
+    padding-left: var(--mtx-safe-left);
+    padding-right: var(--mtx-safe-right);
+  }
+  /* 横屏下全屏弹窗留出左右安全区，避免被挖孔遮挡 */
+  html.mtx-mobile [data-mtx-dialog],
+  html.mtx-mobile .mtx-dialog {
+    padding-left: var(--mtx-safe-left);
+    padding-right: var(--mtx-safe-right);
+  }
+}
+
+/* -----------------------------------------------------------------------------
+ * 11. 软键盘弹起时（JS 给 html 加 .mtx-keyboard-open）
+ *     把贴底的输入操作条抬到键盘之上；避免输入框被键盘盖住。
+ * -------------------------------------------------------------------------- */
+html.mtx-mobile.mtx-keyboard-open .mtx-input-bar,
+html.mtx-mobile.mtx-keyboard-open [data-mtx-input-bar] {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: var(--mtx-keyboard-height);
+  z-index: 70;
+  padding-bottom: 8px;
+  background: var(--mtx-surface);
+  box-shadow: 0 -4px 14px rgba(0, 0, 0, .12);
+}
+/* 键盘弹起时隐藏 FAB，避免遮挡输入 */
+html.mtx-mobile.mtx-keyboard-open .mtx-fab,
+html.mtx-mobile.mtx-keyboard-open [data-mtx-fab] {
+  display: none !important;
+}
+
+/* -----------------------------------------------------------------------------
+ * 12. 减少动态效果（无障碍 / 低端机）
+ * -------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  html.mtx-mobile:not(.mtx-no-motion) *,
+  html.mtx-mobile:not(.mtx-no-motion) *::before,
+  html.mtx-mobile:not(.mtx-no-motion) *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* -----------------------------------------------------------------------------
+ * 13. 长按选择 / 拖拽手感
+ *     列表项默认允许选择文本往往误触，给"卡片/列表行"一个可关的长按防护类。
+ * -------------------------------------------------------------------------- */
+html.mtx-mobile .mtx-noselect,
+html.mtx-mobile [data-mtx-noselect] {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;      /* 关掉 iOS 长按弹出的"复制/查询"菜单 */
+}
+/* 需要长按复制的内容（如磁力链接、密钥）反过来放开 */
+html.mtx-mobile .mtx-selectable,
+html.mtx-mobile [data-mtx-selectable] {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
+
+/* =============================================================================
+ * 说明：以上选择器均为"通用元素 / ARIA / data 钩子 / Tailwind 通用工具类"级别，
+ * 不含 Motrix 业务 class。若页面结构与预期不符（例如弹窗不是 role=dialog、
+ * 列表不是 grid-cols-*），请按实际 DOM 在本文件末尾追加覆盖规则，
+ * 或在对应容器上加 data-mtx-* 钩子（JS 也会自动补部分钩子）。
+ * ========================================================================== */

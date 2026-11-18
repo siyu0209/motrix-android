@@ -1,0 +1,27 @@
+# ---- Gradle / Android build caches ----
+.gradle/
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+*.iml
+.idea/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# ---- secrets (do NOT commit) ----
+android/app/motrix-release.jks
+*.jks
+*.keystore
+
+# ---- temp ----
+*.log
+reports/gradle-*.log
+
+# ---- APKs: only keep the final signed release in the repo ----
+dist/*.apk
+!dist/motrix-android-2.4.3-release-signed.apk
+
+# ---- toolchain downloads (not source) ----
+**/gradle-8.7/

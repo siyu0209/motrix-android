@@ -1,0 +1,230 @@
+/* =============================================================================
+ * proposal-3b-navfix.css  ·  D-3B-04 / D-3B-05 交互规范（纯 CSS 提案）
+ * -----------------------------------------------------------------------------
+ * 用途：仅定义「侧栏召回入口」与「3B→原生返回入口」的外观 / 命中区 / 层级 /
+ *       安全区避让；不改 JS、不改 Kotlin、不改 assets/mobile-adapt.css 本体。
+ * 注入：在 /__mtx/mobile-adapt.css 之后追加一份（建议 /__mtx/proposal-3b-navfix.css）。
+ * 作用域：3B React 外壳根元素已带 .web-window-chrome（docs/10 §6），本文件以它为域。
+ * 门控：可选择配合 html.mtx-mobile（mobile-adapt 的根开关）只在移动适配开启时生效。
+ *
+ * 命名与几何来源（docs/10）：
+ *   - 顶栏 .window-chrome：position:fixed; z-index:30; 高 40px（web 恒 40）；
+ *     padding-inline 12 / 20（docs/10 §2.1–2.3）。
+ *   - 顶栏 leading 槽： [data-slot="window-chrome-leading"]（class 含 relative z-[60]）。
+ *   - 顶栏 actions 槽： [data-slot="window-chrome-actions"]（class 含 relative z-[60]）。
+ *   - 折叠侧栏触发按钮： [data-slot="sidebar-trigger"]，size-7=28px（docs/10 §2.3、
+ *     bundle app-root-CdOTFJ1Y.js @≈591443：「data-slot:"sidebar-trigger", variant:"ghost",
+ *     size:"icon", class "size-7 [&>svg]:opacity-65 ..."），sr-only 文案 chrome.toggleSidebar。
+ *   - 紧凑态/侧栏收起：wrapper .group\/sidebar-wrapper[data-state="collapsed"]；<768 为 Sheet 抽屉。
+ *   - 安全区：WebView 侧刘海/状态栏需叠加 env(safe-area-inset-*)（docs/10 §7 提示）。
+ *
+ * 单位换算：viewport=device-width,initial-scale=1 → 1 CSS px = 1 dp；44dp = 44 CSS px。
+ * ============================================================================= */
+
+/* =============================================================================
+ * §0  令牌（复用 mobile-adapt §0 变量，全部带回退，缺失也不破图）
+ * ============================================================================= */
+.web-window-chrome {
+  --navfix-hit: 44px;                 /* 最小命中区 44dp */
+  --navfix-hit-coarse: 48px;          /* 触屏加档 48dp（可选） */
+  --navfix-radius: 10px;
+  --navfix-accent: var(--mtx-primary, #4c8dff);
+  --navfix-ink: var(--mtx-text, #e6e8ec);
+  --navfix-surface: var(--mtx-surface, #1c1f26);
+}
+
+/* =============================================================================
+ * §1  D-3B-04  侧栏召回入口（顶栏「切换侧栏」触发按钮 [data-slot="sidebar-trigger"]）
+ * -----------------------------------------------------------------------------
+ * 现状问题（docs/11 D-3B-04）：按钮实尺寸仅 28px，低于 44dp 触控建议；窄屏侧栏
+ * 收起后需要反复点才命中。做法：①把命中区用透明伪元素扩到 ≥44×44dp（不改视觉
+ * 尺寸/不挤压邻居布局）；②提升可见性（图标满不透明 + hover/active/focus 反馈）；
+ * ③保证 z 层级高于内容与下载筛选栏（leading 槽本身 z-[60] > 内容 z0 / 顶栏 z30），
+ * 并显式 pointer-events:auto。
+ * ============================================================================= */
+
+/* 1.1 触发按钮本体：建立定位上下文 + 层级 + 可见反馈 */
+.web-window-chrome [data-slot="sidebar-trigger"] {
+  position: relative;                 /* 为 ::after 命中层提供定位基准 */
+  overflow: visible;                  /* 允许命中层溢出 28px 本体 */
+  z-index: 60;                        /* 与 leading 槽一致：盖过内容层（z 自动）与顶栏本体（z-30） */
+  pointer-events: auto;               /* 任何父级 pointer-events:none 场景下仍可点 */
+  -webkit-tap-highlight-color: transparent;
+  border-radius: var(--navfix-radius);
+  transition: background-color .15s ease, opacity .15s ease;
+}
+/* 1.2 44×44dp 透明命中层：28px→44px，各向外扩 8px（不改变视觉尺寸与占位） */
+.web-window-chrome [data-slot="sidebar-trigger"]::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--navfix-hit);           /* 44px */
+  height: var(--navfix-hit);
+  transform: translate(-50%, -50%);
+  background: transparent;            /* 透明，仅承担命中 */
+  border-radius: 12px;
+  pointer-events: auto;
+}
+/* 1.3 视觉可见性：把默认 opacity-65 的图标提到约满不透明，避免"看不见所以点不到" */
+.web-window-chrome [data-slot="sidebar-trigger"] > svg {
+  opacity: .92 !important;
+}
+/* 1.4 交互反馈（hover / 按下 / 键盘焦点） */
+.web-window-chrome [data-slot="sidebar-trigger"]:hover {
+  background: color-mix(in srgb, currentColor 10%, transparent);
+}
+.web-window-chrome [data-slot="sidebar-trigger"]:active {
+  background: color-mix(in srgb, currentColor 18%, transparent);
+}
+.web-window-chrome [data-slot="sidebar-trigger"]:focus-visible {
+  outline: 2px solid var(--navfix-accent);
+  outline-offset: 2px;
+}
+/* 1.5 侧栏「收起态」轻强调：给召回入口一点淡底，提示"点这里唤出"（可删，不打破原观感） */
+.web-window-chrome .group\/sidebar-wrapper[data-state="collapsed"] [data-slot="sidebar-trigger"] {
+  background: color-mix(in srgb, currentColor 6%, transparent);
+}
+/* 1.6 触屏设备命中区再加档到 48dp（选配；仍透明不影响视觉） */
+@media (pointer: coarse) {
+  .web-window-chrome [data-slot="sidebar-trigger"]::after {
+    width: var(--navfix-hit-coarse);
+    height: var(--navfix-hit-coarse);
+  }
+}
+/* 1.7 邻居防误触：若 44dp 命中层与相邻按钮（菜单/新建）轻微交叠，用 gap 兜住（leading 原 gap-2=8px 已足） */
+.web-window-chrome [data-slot="window-chrome-leading"] {
+  gap: 8px;                           /* 与 44dp 扩区协同，避免抢邻钮点击 */
+}
+
+/* =============================================================================
+ * §2  D-3B-04  侧栏 overlay 滑出与"可再收起"——安全区与层级兜底
+ * -----------------------------------------------------------------------------
+ * <768 时侧栏由 Sheet（overlay 抽屉，宽 288px，最大 calc(100vw-2rem)）承担滑出/
+ * 收起（docs/10 §3.2）。它通常被 portal 到 body，故不使用 .web-window-chrome 作用域，
+ * 用稳定 data 属性选择器兜底：只补安全区与可滚动高度，不改其开合动画机制。
+ * ============================================================================= */
+[data-slot="sidebar"][data-mobile="true"] {
+  max-height: 100dvh;                             /* 用动态视口高度，避免地址/导航栏裁切 */
+  padding-left: env(safe-area-inset-left, 0px);   /* 刘海横屏左安全区 */
+  padding-right: env(safe-area-inset-right, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  overscroll-behavior: contain;
+}
+/* Sheet 遮罩需盖住 40px 顶栏，保证遮罩内点击不穿透到顶栏（通常 z-50 > 顶栏 z-30，此处兜底） */
+[data-slot="sidebar"][data-mobile="true"] ~ [data-sidebar-overlay],
+[data-mtx-sidebar-overlay] {
+  z-index: 45;                                    /* 介于顶栏 30 与弹层 50 之间 */
+}
+
+/* =============================================================================
+ * §3  D-3B-05  3B → 原生 返回入口（需 Android 侧新增 finish() 桥，本文件只定外观/放置）
+ * -----------------------------------------------------------------------------
+ * 前置（由 multiplatform-dev 落地）：在 WebView 侧新增一个原生桥，例如
+ *   window.MotrixAndroid.exitToNative()  →  Android 侧 finish()/回到 MainActivity 原生页；
+ * 或复用现有 window.MotrixAndroid.onBack() 语义（docs/07 §3、docs/08 §9）扩展一个显式
+ * "退出到原生"动作。按钮 DOM 由实现方插入，并打上稳定钩子： data-mtx-native-back。
+ *
+ * 推荐位置 A（首选）：放进顶栏右侧 actions 槽
+ *   .window-chrome [data-slot="window-chrome-actions"] [data-mtx-native-back]
+ *   —— 与「+ 新建任务」同一簇、位置固定、拇指可达、天然 z-[60]、无需额外悬浮层。
+ * 位置 B（备选）：右下角悬浮 FAB（给 [data-mtx-native-back][data-mtx-float]）。
+ *   适合不想占用顶栏空间时；避开安全区，z-45。
+ * ============================================================================= */
+
+/* 3.1 主方案：顶栏 actions 槽内的返回按钮（视觉 32，高度适配 40px 顶栏） */
+.web-window-chrome [data-slot="window-chrome-actions"] [data-mtx-native-back] {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 32px;                       /* 视觉高度 32，落在 40px 顶栏内居中 */
+  min-width: 32px;
+  padding: 0 10px;
+  border-radius: var(--navfix-radius);
+  color: var(--navfix-ink);
+  background: color-mix(in srgb, currentColor 8%, transparent);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  z-index: 60;
+  pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color .15s ease, opacity .15s ease;
+}
+/* 3.2 44×44dp 命中层（同 §1.2 技巧） */
+.web-window-chrome [data-slot="window-chrome-actions"] [data-mtx-native-back]::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--navfix-hit);
+  height: var(--navfix-hit);
+  transform: translate(-50%, -50%);
+  background: transparent;
+  border-radius: 12px;
+  pointer-events: auto;
+}
+/* 3.3 交互反馈 */
+.web-window-chrome [data-slot="window-chrome-actions"] [data-mtx-native-back]:hover {
+  background: color-mix(in srgb, currentColor 14%, transparent);
+}
+.web-window-chrome [data-slot="window-chrome-actions"] [data-mtx-native-back]:active {
+  background: color-mix(in srgb, currentColor 22%, transparent);
+}
+.web-window-chrome [data-slot="window-chrome-actions"] [data-mtx-native-back]:focus-visible {
+  outline: 2px solid var(--navfix-accent);
+  outline-offset: 2px;
+}
+/* 3.4 返回按钮与「+ 新建」保持 8px 间距，避免误触 */
+.web-window-chrome [data-slot="window-chrome-actions"] [data-mtx-native-back] {
+  margin-inline-end: 4px;
+}
+
+/* 3.5 备选方案 B：右下角悬浮 FAB（仅在实现方给按钮加 data-mtx-float 时生效） */
+[data-mtx-native-back][data-mtx-float] {
+  position: fixed;
+  right: calc(16px + env(safe-area-inset-right, 0px));
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  z-index: 45;                        /* 高于内容/顶栏，低于弹层 z-50 */
+  width: 48px;
+  height: 48px;                       /* 本身就是 48dp，天然满足 ≥44dp */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  color: #fff;
+  background: var(--navfix-accent);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .35), 0 2px 6px rgba(0, 0, 0, .25);
+  pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
+}
+[data-mtx-native-back][data-mtx-float]:active {
+  transform: scale(.96);
+}
+
+/* =============================================================================
+ * §4  顶栏两槽安全区避让（不改变 fix18 已定的竖向让位，只补横向安全区）
+ * -----------------------------------------------------------------------------
+ * 顶栏 .window-chrome 内联 paddingInline 12/20；此处用 !important 覆盖为
+ * max(基础值, env(safe-area-inset-*))，适配刘海/圆角屏横屏左右安全区。
+ * 若 assets/mobile-adapt.css §1（fix18 系列）已做同样覆盖，本段与其等价、可省。
+ * ============================================================================= */
+.web-window-chrome .window-chrome {
+  padding-inline-start: max(12px, env(safe-area-inset-left, 0px)) !important;
+  padding-inline-end: max(20px, env(safe-area-inset-right, 0px)) !important;
+  /* 状态栏安全区（安卓层通常已由主题不透明状态栏吃掉，env-top 多为 0；保留兜底） */
+  padding-top: env(safe-area-inset-top, 0px);
+  box-sizing: border-box;
+}
+
+/* =============================================================================
+ * §5  兼容与关闭
+ * -----------------------------------------------------------------------------
+ * - 全部规则为"增强"，不启用本文件时 3B 原样工作（零影响）。
+ * - 若只想在移动适配开启时生效，可将 §1、§3（顶栏内）规则前置 html.mtx-mobile 作用域。
+ * - 全部用 [data-slot] / [data-mtx-*] 稳定钩子与属性选择器，未使用关系型伪类（:has）。
+ * - 变量 --mtx-* 缺失时均有回退色值，不污染其它端。
+ * ============================================================================= */

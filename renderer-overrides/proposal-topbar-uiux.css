@@ -1,0 +1,122 @@
+/* =============================================================================
+ * proposal-topbar-uiux.css — 3B 窄屏(<768) 顶栏避让 · 稳妥 CSS 提案
+ * -----------------------------------------------------------------------------
+ * 目标：Motrix 原版 React 界面（assets/renderer-web）在安卓端，窄屏 / 手机竖屏时，
+ *       页面大标题（如“仪表板”）与固定顶栏 .window-chrome（高 40px，含 m·o 徽标 /
+ *       切换侧栏 / + 按钮）发生重叠。本文件在不改 JS/Kotlin、不改 mobile-adapt.css
+ *       的前提下，用纯 CSS 让内容区稳定让出顶部固定工具栏，并兼顾状态栏 / 安全区与
+ *       各页面标题顶线一致。
+ *
+ * 事实依据（均见 docs/10-布局断点分析.md，源码直证）：
+ *   • .window-chrome = position:fixed; top:0; left:0; right:0; z-index:30;
+ *     background:transparent; 高 40px（web 目标恒 40，window-chrome.ts ru() 逻辑）。
+ *   • 侧栏折叠断点 = 768px(48rem)；<768 侧栏变 Sheet 抽屉，data-state 强制 collapsed。
+ *   • 让位对象 = 内容卡本体 main[data-slot="sidebar-inset"]（<768 统一竖向下移、单次生效）。
+ *   • 官方避让：PanelShell header pt-8(32)+inset m-2(8)=40（竖向）；
+ *     紧凑态 ps-[--window-chrome-safe-area-leading]=160px（横向）；<640 覆盖 pt-44/56。
+ *   • 3B 重叠根因：自绘标题未走 PanelShell，既没有竖向 pt-8，也没有横向 ps-160。
+ *
+ * 选择器约定：统一用 [class~="..."] 精确匹配 Tailwind 实用类；用 [data-slot="..."] 语义锚点；
+ *            不使用任何关系型/父级选择器伪类。断点与官方完全对齐：768 / 640 / pointer:coarse。
+ * 生效前提：本文件须在 mobile-adapt.css 之后注入（且仅作用于 html.mtx-mobile 根开关）。
+ * ========================================================================== */
+
+/* -----------------------------------------------------------------------------
+ * 0. 追加设计令牌（只新增顶栏相关量，不改动 mobile-adapt.css 既有变量）
+ * -------------------------------------------------------------------------- */
+html.mtx-mobile {
+  --mtx-chrome-h: 40px;             /* 顶栏固定高度（web 恒 40） */
+  --mtx-chrome-top-gap: 4px;        /* 标题/内容与顶栏下沿的最小呼吸（触屏见 §3 放宽到 16） */
+  --mtx-chrome-leading-safe: 160px; /* 顶栏左侧控件簇安全区（m·o 徽标 x≈12..84 + 侧栏钮 + 新建钮，官方取整 160） */
+  /* 顶部需让出的总高度 = 顶栏 + 状态栏安全区 + 呼吸。
+     env() 兜底用于未加载 mobile-adapt.css 的独立引入场景。 */
+  --mtx-top-clear: calc(
+    var(--mtx-chrome-h)
+    + var(--mtx-safe-top, env(safe-area-inset-top, 0px))
+    + var(--mtx-chrome-top-gap)
+  );
+}
+
+/* -----------------------------------------------------------------------------
+ * 1. 顶栏本身：安全区撑高 + 实底 + 细阴影
+ *    针对元素：.window-chrome（原为 fixed / 透明 / z-index:30）
+ *    原因：透明覆盖条下内容会“透”上来，视觉上依旧像压字；改为与页面同色的实底，
+ *          并确保条高含状态栏安全区；保留原 z-index 不改，既有层级（面板按钮 z-40、
+ *          弹层 z-50）不受影响。
+ *    作用域：html.mtx-mobile 全部（本层只用于安卓移动端；桌面端不加载本层）。
+ * -------------------------------------------------------------------------- */
+html.mtx-mobile .window-chrome {
+  /* box-sizing:border-box 保证 padding-top 吃在 height 内部（条总高 = 40 + safe，图标不溢出） */
+  box-sizing: border-box;
+  /* 若 WebView 走 edge-to-edge（env(safe-area-inset-top)>0），高度与内边距一起让出状态栏；
+     若原生层已把 WebView 垫到状态栏下方（env=0），此处等价原 40px，不产生额外留白。 */
+  height: calc(var(--mtx-chrome-h) + var(--mtx-safe-top, env(safe-area-inset-top, 0px))) !important;
+  padding-top: var(--mtx-safe-top, env(safe-area-inset-top, 0px)) !important;
+  /* 横屏刘海 / 挖孔：左右安全区（覆盖内联 paddingInlineStart/End 的 12/20，取较大值） */
+  padding-left: max(12px, env(safe-area-inset-left, 0px)) !important;
+  padding-right: max(20px, env(safe-area-inset-right, 0px)) !important;
+  padding-inline-start: max(12px, env(safe-area-inset-left, 0px)) !important;
+  padding-inline-end: max(20px, env(safe-area-inset-right, 0px)) !important;
+  /* 实底：与页面/侧栏底色一致，避免内容透过 */
+  background: var(--mtx-bg, #14161a) !important;
+  -webkit-backdrop-filter: saturate(140%) blur(10px);
+  backdrop-filter: saturate(140%) blur(10px);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, .18), 0 6px 16px -8px rgba(0, 0, 0, .35);
+}
+
+/* -----------------------------------------------------------------------------
+ * 2. 内容区让位（核心）：<768（侧栏 Sheet / 紧凑态）统一竖向下移。
+ *    做法对齐 fix18 采用的“方案 A”：只给内容卡本体 main[data-slot="sidebar-inset"]
+ *    加 padding-top，单次生效；不再用会同时命中 main + 内层 div 的三属性选择器（避免 ~92px 双倍）。
+ *    为什么竖移、不用 640–767“同行”：顶栏已改全宽实底（§1），横向同行会被实底盖住标题，
+ *    因此 <768 一律下移到顶栏之下，三档（≥768 / 640–767 / <640）行为一致。
+ * -------------------------------------------------------------------------- */
+@media (max-width: 767.98px) {
+  html.mtx-mobile main[data-slot="sidebar-inset"] {
+    padding-top: 44px !important;   /* 40 顶栏 + 4 呼吸 */
+    box-sizing: border-box;
+  }
+}
+@media (max-width: 767.98px) and (pointer: coarse) {
+  html.mtx-mobile main[data-slot="sidebar-inset"] {
+    padding-top: 56px !important;   /* 触屏：40 + 16，热区/可读性更稳 */
+  }
+}
+
+/* 2.2 内建 PanelShell header 顶部内距归零：避免“main 44 + header pt-8(32)=76”多出一截。
+     仅 <768 生效；横向把 ps-160 收回 16px（竖向已下移，手机宽度无需再横向躲）。 */
+@media (max-width: 767.98px) {
+  html.mtx-mobile .web-window-chrome [data-slot="panel-shell-header"] {
+    padding-block-start: 0 !important;
+    padding-inline: 16px !important;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+}
+
+/* 2.3 首个标题去掉自带的上外边距：让“自绘 h1/h2”与“PanelShell 标题”顶线一致。 */
+@media (max-width: 767.98px) {
+  html.mtx-mobile [data-slot="sidebar-inset"] h1:first-child,
+  html.mtx-mobile [data-slot="sidebar-inset"] h2:first-child {
+    margin-top: 0 !important;
+  }
+}
+
+/* -----------------------------------------------------------------------------
+ * 3. 极矮横屏（如 360dp 高）兜底：让位压到 42px，避免吃掉本就紧张的首屏 */
+@media (orientation: landscape) and (max-height: 420px) {
+  html.mtx-mobile main[data-slot="sidebar-inset"] {
+    padding-top: 42px !important;
+  }
+}
+
+/* -----------------------------------------------------------------------------
+ * 5. 兜底：若某页把标题放在 y<40 顶栏带内且左对齐（未吃到 §2 的竖移，
+ *    例如整页用 position:fixed 自绘头），强制左内边距 ≥ 左侧控件簇（官方安全区 160px）。
+ *    data-mtx-topbar-avoid 是给“必须与顶栏同行”的少数控件预留的显式钩子；
+ *    绝大多数页面走 §2 竖向下移，无需它。 */
+@media (max-width: 767.98px) {
+  html.mtx-mobile .web-window-chrome [data-mtx-topbar-avoid] {
+    padding-inline-start: var(--mtx-chrome-leading-safe) !important;
+  }
+}

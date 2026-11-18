@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 深色（夜间）主题色板 -->
+    <color name="mtx_bg">#0F1720</color>
+    <color name="mtx_surface">#1B2733</color>
+    <color name="mtx_accent">#4C8DFF</color>
+    <color name="mtx_text">#E8EDF2</color>
+    <color name="mtx_text_dim">#93A1AE</color>
+    <color name="mtx_track">#2A3947</color>
+</resources>

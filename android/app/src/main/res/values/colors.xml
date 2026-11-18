@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 浅色（日间）主题色板 -->
+    <color name="mtx_bg">#F5F6F8</color>
+    <color name="mtx_surface">#FFFFFF</color>
+    <color name="mtx_accent">#3B82F6</color>
+    <color name="mtx_text">#1C2024</color>
+    <color name="mtx_text_dim">#6B7280</color>
+    <color name="mtx_track">#E3E6EB</color>
+</resources>

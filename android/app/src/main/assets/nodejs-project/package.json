@@ -1,0 +1,16 @@
+{
+  "name": "motrix-android-nodejs-project",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Motrix Android 模式B 端内嵌后端引导层（nodejs-mobile 入口）",
+  "type": "module",
+  "main": "main.js",
+  "engines": {
+    "node": ">=16"
+  },
+  "scripts": {
+    "start": "node main.js",
+    "healthcheck": "node healthcheck.js"
+  },
+  "license": "MIT"
+}
